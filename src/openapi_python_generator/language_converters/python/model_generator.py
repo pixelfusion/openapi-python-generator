@@ -1,3 +1,6 @@
+"""
+Model generator
+"""
 import itertools
 import re
 from typing import List
@@ -9,18 +12,19 @@ from openapi_pydantic.v3.v3_0 import Schema, Reference, Components
 from openapi_python_generator.common import PydanticVersion
 from openapi_python_generator.language_converters.python import common
 from openapi_python_generator.language_converters.python.jinja_config import (
-    ENUM_TEMPLATE, MODELS_TEMPLATE_PYDANTIC_V2,
-)
-from openapi_python_generator.language_converters.python.jinja_config import (
+    ENUM_TEMPLATE,
+    MODELS_UNION_TEMPLATE,
+    MODELS_TEMPLATE_PYDANTIC_V2,
     MODELS_TEMPLATE,
-)
-from openapi_python_generator.language_converters.python.jinja_config import (
     create_jinja_env,
 )
-from openapi_python_generator.models import Model
-from openapi_python_generator.models import Property
-from openapi_python_generator.models import TypeConversion
-from openapi_python_generator.models import ParentModel
+from openapi_python_generator.models import (
+    Model,
+    ModelType,
+    Property,
+    TypeConversion,
+    ParentModel
+)
 
 
 def type_converter(  # noqa: C901
@@ -376,7 +380,19 @@ def generate_models(components: Components, pydantic_version: PydanticVersion = 
                 for conv_property in _collect_properties_from_schema(name, parent_component):
                     properties.append(conv_property)
 
-        template_name = MODELS_TEMPLATE_PYDANTIC_V2 if pydantic_version == PydanticVersion.V2 else MODELS_TEMPLATE
+        # Determine model type and template
+        if schema_or_reference.oneOf:
+            model_type = ModelType.UNION
+            template_name = MODELS_UNION_TEMPLATE
+            if pydantic_version == PydanticVersion.V1:
+                raise Exception("Union types are not supported in pydantic v1")
+        else:
+            model_type = ModelType.OBJECT
+            template_name = (
+                MODELS_TEMPLATE_PYDANTIC_V2
+                if pydantic_version == PydanticVersion.V2
+                else MODELS_TEMPLATE
+            )
 
         generated_content = jinja_env.get_template(template_name).render(
             schema_name=name,
@@ -396,7 +412,8 @@ def generate_models(components: Components, pydantic_version: PydanticVersion = 
                 content=generated_content,
                 openapi_object=schema_or_reference,
                 properties=properties,
-                parent_components=parent_components
+                parent_components=parent_components,
+                model_type=model_type,
             )
         )
 

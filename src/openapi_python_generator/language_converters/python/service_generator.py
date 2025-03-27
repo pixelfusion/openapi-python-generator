@@ -18,6 +18,8 @@ from openapi_python_generator.language_converters.python.model_generator import 
     type_converter,
 )
 from openapi_python_generator.models import LibraryConfig
+from openapi_python_generator.models import Model
+from openapi_python_generator.models import ModelType
 from openapi_python_generator.models import OpReturnType
 from openapi_python_generator.models import Service
 from openapi_python_generator.models import ServiceOperation
@@ -79,11 +81,22 @@ def generate_body_param(operation: Operation) -> Union[str, None]:
                 f"Unsupported schema type for request body: {type(media_type.media_type_schema)}"
             )  # pragma: no cover
 
+def generate_params(operation: Operation, models: list[Model]) -> str:
+    def _generate_reference_type(content: Reference, required = True) -> str:
+        """
+        For a given reference, type hint the argument
+        """
+        name = common.normalize_symbol(content.ref.split("/")[-1])
+        result = name
+        for model in models:
+            if model.file_name == name and model.model_type == ModelType.UNION:
+                result = f"{' | '.join([i.name for i in model.parent_components])}"
+                break
+        return result if required else f"{result} | None"
 
-def generate_params(operation: Operation) -> str:
     def _generate_params_from_content(content: Union[Reference, Schema]):
         if isinstance(content, Reference):
-            return f"data : {content.ref.split('/')[-1]}"
+            return f"data : {_generate_reference_type(content)}"
         else:
             return f"data : {type_converter(content, True).converted_type}"
 
@@ -101,21 +114,21 @@ def generate_params(operation: Operation) -> str:
             param_name_cleaned = common.normalize_symbol(param.name)
 
             if isinstance(param.param_schema, Schema):
+                required = param.required
                 converted_result = (
                     f"{param_name_cleaned} : {type_converter(param.param_schema, param.required).converted_type}"
                     + ("" if param.required else " = None")
                 )
-                required = param.required
             elif isinstance(param.param_schema, Reference):
+                required = isinstance(param, Reference) or param.required
                 converted_result = (
-                    f"{param_name_cleaned} : {param.param_schema.ref.split('/')[-1] }"
+                    f"{param_name_cleaned} : {_generate_reference_type(param.param_schema, required)}"
                     + (
                         ""
-                        if isinstance(param, Reference) or param.required
+                        if required
                         else " = None"
                     )
                 )
-                required = isinstance(param, Reference) or param.required
 
             if required:
                 params += f"{converted_result}, "
@@ -274,7 +287,7 @@ def generate_return_type(operation: Operation) -> OpReturnType:
 
 
 def generate_services(
-    paths: Dict[str, PathItem], library_config: LibraryConfig
+    paths: Dict[str, PathItem], library_config: LibraryConfig, models: list[Model]
 ) -> List[Service]:
     """
     Generates services from a paths object.
@@ -286,7 +299,7 @@ def generate_services(
     def generate_service_operation(
         op: Operation, path_name: str, async_type: bool
     ) -> ServiceOperation:
-        params = generate_params(op)
+        params = generate_params(op, models)
         operation_id = generate_operation_id(op, http_operation, path_name)
         query_params = generate_query_params(op)
         header_params = generate_header_params(op)

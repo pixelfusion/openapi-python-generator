@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import List
 from typing import Optional
 
@@ -56,6 +57,9 @@ class ParentModel(BaseModel):
     name: str
     import_type: Optional[str] = None
 
+class ModelType(Enum):
+    OBJECT = "object" # This model is a normal class, possibly with properties or zero or more parent classes
+    UNION = "union" # This model is a root class acting as a union of multiple classes
 
 class Model(BaseModel):
     file_name: str
@@ -63,6 +67,7 @@ class Model(BaseModel):
     openapi_object: Schema
     properties: List[Property] = []
     parent_components: List[ParentModel] = []
+    model_type: ModelType = ModelType.OBJECT
 
 
 class Service(BaseModel):
