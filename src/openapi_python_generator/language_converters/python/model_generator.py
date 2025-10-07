@@ -1,5 +1,4 @@
 import itertools
-import re
 from typing import List
 from typing import Optional
 
@@ -334,11 +333,9 @@ def generate_models(components: Components, pydantic_version: PydanticVersion = 
     for schema_name, schema_or_reference in components.schemas.items():
         name = common.normalize_symbol(schema_name)
         if schema_or_reference.enum is not None:
-            value_dict = schema_or_reference.dict()
-            regex = re.compile(r"[\s\/=\*\+]+")
+            value_dict = schema_or_reference.model_dump()
             value_dict["enum"] = [
-                re.sub(regex, "_", i) if isinstance(i, str) else f"value_{i}"
-                for i in value_dict["enum"]
+                (common.normalize_symbol(str(i)).upper(), i) for i in value_dict["enum"]
             ]
             m = Model(
                 file_name=name,
